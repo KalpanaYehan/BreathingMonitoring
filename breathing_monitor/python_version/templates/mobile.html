@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mobile Breathing Monitor</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .instructions {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        
+        .instructions h3 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            margin: 8px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            min-width: 140px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            margin: 20px 0;
+            font-weight: 600;
+            border-left: 4px solid #007bff;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left-color: #ffc107;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+        
+        .camera-section {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .camera-container {
+            position: relative;
+            display: inline-block;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        
+        #videoElement {
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            display: block;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+        
+        .breathing-box {
+            position: absolute;
+            top: 25%;
+            left: 25%;
+            width: 50%;
+            height: 50%;
+            border: 3px solid #00ff00;
+            border-radius: 10px;
+            background: rgba(0, 255, 0, 0.1);
+        }
+        
+        .breathing-label {
+            position: absolute;
+            top: 20%;
+            left: 25%;
+            right: 25%;
+            text-align: center;
+            color: #00ff00;
+            font-weight: bold;
+            font-size: 0.9em;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px;
+            border-radius: 5px;
+        }
+        
+        .data-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .data-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .data-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .chart-container {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            height: 300px;
+            overflow: hidden;
+        }
+        
+        #breathingChart {
+            width: 100% !important;
+            height: 300px !important;
+        }
+        
+        .respiration-result {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 20px;
+            margin: 20px 0;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        
+        .respiration-result h3 {
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .result-value {
+            font-size: 3.5em;
+            font-weight: bold;
+            margin: 15px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .result-label {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        .result-status {
+            font-size: 1em;
+            opacity: 0.8;
+            font-style: italic;
+        }
+        
+        .permission-notice {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 15px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+            color: #856404;
+        }
+        
+        .permission-notice h4 {
+            margin-bottom: 10px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 480px) {
+            .container {
+                margin: 5px;
+                border-radius: 15px;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .btn {
+                padding: 12px 20px;
+                font-size: 14px;
+                min-width: 120px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .result-value {
+                font-size: 3em;
+            }
+        }
+        
+        /* Landscape orientation adjustments */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .chart-container {
+                height: 200px;
+            }
+            
+            #breathingChart {
+                height: 200px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌬️ Mobile Breathing Monitor</h1>
+            <p>Monitor your breathing using your iPhone camera</p>
+        </div>
+        
+        <div class="content">
+            <div class="instructions">
+                <h3>📱 How to Use:</h3>
+                <ol>
+                    <li>Allow camera access when prompted</li>
+                    <li>Position your chest in the green box</li>
+                    <li>Stay still and breathe normally</li>
+                    <li>Watch the breathing pattern chart</li>
+                    <li>Stop when you have enough data</li>
+                </ol>
+            </div>
+            
+            <div class="permission-notice" id="permissionNotice">
+                <h4>🔒 Camera Permission Required</h4>
+                <p>This app needs access to your camera to monitor breathing patterns. Please allow camera access when prompted.</p>
+            </div>
+            
+            <div class="controls">
+                <button id="startBtn" class="btn">🚀 Start Monitoring</button>
+                <button id="stopBtn" class="btn btn-secondary" disabled>⏹️ Stop</button>
+            </div>
+            
+            <div class="status" id="status">
+                Ready to start monitoring
+            </div>
+            
+            <div class="camera-section" id="cameraSection" style="display: none;">
+                <h3>📹 Camera View</h3>
+                <div class="camera-container">
+                    <video id="videoElement" autoplay muted playsinline></video>
+                    <div class="camera-overlay">
+                        <div class="breathing-box"></div>
+                        <div class="breathing-label">Position chest here</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="data-display">
+                <div class="data-label">Data Points Collected</div>
+                <div class="data-value" id="dataPoints">0</div>
+            </div>
+            
+            <div class="data-display">
+                <div class="data-label">Latest Brightness Value</div>
+                <div class="data-value" id="latestBrightness">--</div>
+            </div>
+            
+            <div class="data-display">
+                <div class="data-label">Current Time</div>
+                <div class="data-value" id="currentTime">--</div>
+            </div>
+            
+            <div class="data-display">
+                <div class="data-label">Recent Data Stream</div>
+                <div class="data-value" id="dataStream" style="font-size: 0.8em; max-height: 100px; overflow-y: auto;">--</div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>📊 Breathing Pattern</h3>
+                <canvas id="breathingChart"></canvas>
+            </div>
+            
+            <div class="respiration-result hidden" id="respirationResult">
+                <h3>📊 Respiration Rate Analysis</h3>
+                <div class="result-value" id="respirationRate">--</div>
+                <div class="result-label">breaths per minute</div>
+                <div class="result-status" id="respirationStatus">--</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        class MobileBreathingMonitor {
+            constructor() {
+                this.video = document.getElementById('videoElement');
+                this.stream = null;
+                this.chart = null;
+                this.isMonitoring = false;
+                this.updateInterval = null;
+                this.dataInterval = null;
+                this.breathingData = [];
+                this.timestamps = [];
+                this.startTime = null;
+                
+                this.initializeChart();
+                this.setupEventListeners();
+                this.checkHTTPS();
+            }
+            
+            checkHTTPS() {
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                    this.updateStatus('⚠️ HTTPS required for camera access. Please use HTTPS.', 'error');
+                    document.getElementById('startBtn').disabled = true;
+                }
+            }
+            
+            initializeChart() {
+                const ctx = document.getElementById('breathingChart').getContext('2d');
+                
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Breathing Pattern',
+                            data: [],
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0,
+                                max: 60,
+                                ticks: {
+                                    stepSize: 10,
+                                    maxTicksLimit: 6
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)'
+                                }
+                            },
+                            y: {
+                                type: 'linear',
+                                min: 18,
+                                max: 23,
+                                ticks: {
+                                    stepSize: 0.5,
+                                    maxTicksLimit: 10
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Breathing Value'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            setupEventListeners() {
+                document.getElementById('startBtn').addEventListener('click', () => this.startMonitoring());
+                document.getElementById('stopBtn').addEventListener('click', () => this.stopMonitoring());
+            }
+            
+            async startMonitoring() {
+                try {
+                    this.updateStatus('Requesting camera access...', 'warning');
+                    
+                    // Request camera access
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: 'user' // Front camera
+                        }
+                    });
+                    
+                    this.video.srcObject = this.stream;
+                    this.video.play();
+                    
+                    // Show camera section
+                    document.getElementById('cameraSection').style.display = 'block';
+                    document.getElementById('permissionNotice').style.display = 'none';
+                    
+                    this.isMonitoring = true;
+                    this.startTime = Date.now();
+                    this.breathingData = [];
+                    this.timestamps = [];
+                    
+                    this.updateStatus('Monitoring active! Stay still and breathe normally.', 'success');
+                    this.updateButtonStates();
+                    this.clearChart();
+                    this.hideRespirationResult();
+                    
+                    console.log('🚀 Mobile monitoring started - data collection active');
+                    
+                    // Start data collection
+                    this.startDataCollection();
+                    
+                } catch (error) {
+                    console.error('Camera access error:', error);
+                    this.updateStatus('Camera access denied or not available: ' + error.message, 'error');
+                }
+            }
+            
+            startDataCollection() {
+                // Collect breathing data every 200ms (5 Hz)
+                this.dataInterval = setInterval(() => {
+                    this.collectBreathingData();
+                }, 200);
+                
+                // Update display every second
+                this.updateInterval = setInterval(() => {
+                    this.updateDisplay();
+                }, 1000);
+            }
+            
+            collectBreathingData() {
+                if (!this.isMonitoring || !this.video.videoWidth) return;
+                
+                try {
+                    // Create canvas to capture frame
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    canvas.width = this.video.videoWidth;
+                    canvas.height = this.video.videoHeight;
+                    
+                    // Draw current video frame
+                    ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Use EXACT same algorithm as backend server (minimal_monitor.py)
+                    // Backend: center_region = gray[h//4:3*h//4, w//4:3*w//4] (center 1/2)
+                    const h = canvas.height;
+                    const w = canvas.width;
+                    
+                    // Match backend: h//4:3*h//4, w//4:3*w//4 (center 1/2 of frame)
+                    const startH = Math.floor(h / 4);
+                    const endH = Math.floor(3 * h / 4);
+                    const startW = Math.floor(w / 4);
+                    const endW = Math.floor(3 * w / 4);
+                    
+                    // Get image data from exact same region as backend
+                    const imageData = ctx.getImageData(startW, startH, endW - startW, endH - startH);
+                    const data = imageData.data;
+                    
+                    // Calculate average brightness (same as backend: np.mean(center_region))
+                    let totalBrightness = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        const brightness = (r + g + b) / 3;
+                        totalBrightness += brightness;
+                    }
+                    
+                    const avgBrightness = totalBrightness / (data.length / 4);
+                    
+                    // Apply EXACT same normalization and amplification as backend
+                    // Backend: normalized_brightness = (brightness / 255.0) * 10
+                    const normalizedBrightness = (avgBrightness / 255.0) * 10;
+                    
+                    // Backend: amplified_brightness = normalized_brightness * 5
+                    const amplifiedBrightness = normalizedBrightness * 5;
+                    
+                    // Store data
+                    const timestamp = (Date.now() - this.startTime) / 1000;
+                    this.breathingData.push(amplifiedBrightness);
+                    this.timestamps.push(timestamp);
+                    
+                    // Print data point to console (same format as backend)
+                    console.log(`📊 Mobile Data Point: Brightness=${amplifiedBrightness.toFixed(3)}, Time=${timestamp.toFixed(1)}s`);
+                    
+                    // Keep only last 300 data points (60 seconds at 5 Hz)
+                    if (this.breathingData.length > 300) {
+                        this.breathingData.shift();
+                        this.timestamps.shift();
+                    }
+                    
+                } catch (error) {
+                    console.error('Data collection error:', error);
+                }
+            }
+            
+            updateDisplay() {
+                // Update data points count
+                document.getElementById('dataPoints').textContent = this.breathingData.length;
+                
+                // Update mobile display with real-time values
+                if (this.breathingData.length > 0) {
+                    const latestValue = this.breathingData[this.breathingData.length - 1];
+                    const currentTime = this.timestamps[this.timestamps.length - 1];
+                    
+                    // Show values on mobile screen
+                    document.getElementById('latestBrightness').textContent = latestValue.toFixed(3);
+                    document.getElementById('currentTime').textContent = currentTime.toFixed(1) + 's';
+                    
+                    // Show recent data stream (last 10 points)
+                    const recentCount = Math.min(10, this.breathingData.length);
+                    const recentData = this.breathingData.slice(-recentCount);
+                    const recentTimes = this.timestamps.slice(-recentCount);
+                    
+                    let dataStreamText = '';
+                    for (let i = 0; i < recentData.length; i++) {
+                        dataStreamText += `${recentTimes[i].toFixed(1)}s: ${recentData[i].toFixed(3)}\n`;
+                    }
+                    document.getElementById('dataStream').textContent = dataStreamText;
+                    
+                    // Also log to console for debugging
+                    console.log(`📈 Data Collection: ${this.breathingData.length} points, Latest: ${latestValue.toFixed(3)}`);
+                } else {
+                    // Reset display when no data
+                    document.getElementById('latestBrightness').textContent = '--';
+                    document.getElementById('currentTime').textContent = '--';
+                    document.getElementById('dataStream').textContent = '--';
+                }
+                
+                // Update chart
+                if (this.breathingData.length > 0) {
+                    this.updateChart();
+                }
+            }
+            
+            updateChart() {
+                try {
+                    this.chart.data.labels = this.timestamps.map(t => t.toFixed(1));
+                    this.chart.data.datasets[0].data = this.breathingData;
+                    this.chart.update('none');
+                } catch (error) {
+                    console.error('Chart update error:', error);
+                }
+            }
+            
+            clearChart() {
+                this.chart.data.labels = [];
+                this.chart.data.datasets[0].data = [];
+                this.chart.update('none');
+            }
+            
+            async stopMonitoring() {
+                this.isMonitoring = false;
+                
+                // Stop data collection
+                if (this.dataInterval) {
+                    clearInterval(this.dataInterval);
+                    this.dataInterval = null;
+                }
+                
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                    this.updateInterval = null;
+                }
+                
+                // Stop camera
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                
+                this.video.srcObject = null;
+                document.getElementById('cameraSection').style.display = 'none';
+                
+                this.updateStatus('Monitoring stopped. Calculating respiration rate...', 'warning');
+                this.updateButtonStates();
+                
+                console.log(`⏹️ Mobile monitoring stopped - collected ${this.breathingData.length} data points`);
+                
+                // Calculate and display respiration rate
+                const respirationRate = this.calculateRespirationRate();
+                this.displayRespirationRate(respirationRate);
+            }
+            
+            calculateRespirationRate() {
+                try {
+                    if (this.breathingData.length < 20) {
+                        return null;
+                    }
+                    
+                    // Simple peak detection
+                    const data = this.breathingData;
+                    const peaks = [];
+                    
+                    // Find local maxima
+                    for (let i = 1; i < data.length - 1; i++) {
+                        if (data[i] > data[i-1] && data[i] > data[i+1] && data[i] > 5) {
+                            peaks.push(i);
+                        }
+                    }
+                    
+                    if (peaks.length < 2) {
+                        return null;
+                    }
+                    
+                    // Calculate average time between peaks
+                    const peakTimes = peaks.map(p => this.timestamps[p]);
+                    const intervals = [];
+                    
+                    for (let i = 1; i < peakTimes.length; i++) {
+                        intervals.push(peakTimes[i] - peakTimes[i-1]);
+                    }
+                    
+                    // Filter realistic intervals (2-8 seconds)
+                    const validIntervals = intervals.filter(interval => interval >= 2 && interval <= 8);
+                    
+                    if (validIntervals.length === 0) {
+                        return null;
+                    }
+                    
+                    const avgInterval = validIntervals.reduce((a, b) => a + b, 0) / validIntervals.length;
+                    const respirationRate = 60 / avgInterval;
+                    
+                    return respirationRate;
+                    
+                } catch (error) {
+                    console.error('Respiration rate calculation error:', error);
+                    return null;
+                }
+            }
+            
+            displayRespirationRate(rate) {
+                const resultElement = document.getElementById('respirationResult');
+                const rateElement = document.getElementById('respirationRate');
+                const statusElement = document.getElementById('respirationStatus');
+                
+                if (rate !== null && rate !== undefined) {
+                    rateElement.textContent = rate.toFixed(1);
+                    
+                    if (rate < 12) {
+                        statusElement.textContent = 'Slow breathing (normal for relaxation)';
+                    } else if (rate <= 20) {
+                        statusElement.textContent = 'Normal breathing rate';
+                    } else if (rate <= 25) {
+                        statusElement.textContent = 'Slightly elevated (normal for activity)';
+                    } else {
+                        statusElement.textContent = 'Elevated breathing rate';
+                    }
+                    
+                    this.updateStatus('Analysis complete!', 'success');
+                } else {
+                    rateElement.textContent = 'N/A';
+                    statusElement.textContent = 'Insufficient data for analysis';
+                    this.updateStatus('Could not calculate respiration rate. Try monitoring for longer.', 'warning');
+                }
+                
+                resultElement.classList.remove('hidden');
+            }
+            
+            hideRespirationResult() {
+                document.getElementById('respirationResult').classList.add('hidden');
+            }
+            
+            updateButtonStates() {
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                
+                startBtn.disabled = this.isMonitoring;
+                stopBtn.disabled = !this.isMonitoring;
+            }
+            
+            updateStatus(message, type = 'info') {
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = message;
+                statusElement.className = 'status ' + type;
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new MobileBreathingMonitor();
+        });
+    </script>
+</body>
+</html>
