@@ -9,8 +9,9 @@ import ssl
 import os
 
 class MinimalBreathingMonitor:
-    def __init__(self):
+    def __init__(self, camera_index=None):
         self.cap = None
+        self.camera_index = camera_index  # None=auto-detect, 0=laptop camera, 1=external webcam, etc.
         self.breathing_data = []
         self.timestamps = []
         self.is_monitoring = False
@@ -20,17 +21,126 @@ class MinimalBreathingMonitor:
         self.sample_rate = 5  # Hz (5 samples per second for accuracy)
         self.max_data_points = 1000  # Keep more data points for higher frequency
         
-        print("✅ Minimal Breathing Monitor initialized")
+        # Detect available cameras if not specified
+        if self.camera_index is None:
+            self.camera_index = self._find_available_camera()
+        
+        print(f"✅ Minimal Breathing Monitor initialized (using camera {self.camera_index})")
+    
+    def _find_available_camera(self):
+        """Find the first available camera, preferring external webcams"""
+        print("🔍 Detecting available cameras...")
+        
+        # Try indices 0-5 to find cameras that can actually read frames
+        available_cameras = []
+        camera_names = {}
+        
+        for i in range(5):
+            try:
+                # Check if this camera exists in sysfs first
+                try:
+                    with open(f'/sys/class/video4linux/video{i}/name', 'r') as f:
+                        name = f.read().strip()
+                        camera_names[i] = name
+                        print(f"   🔍 Found video{i}: {name}")
+                except:
+                    continue  # Skip if device doesn't exist
+                
+                cap = cv2.VideoCapture(i)
+                if cap.isOpened():
+                    # Some cameras (especially USB) need significant time to initialize
+                    ret, frame = False, None
+                    is_usb = 'usb' in name.lower()
+                    
+                    print(f"      Testing camera {i} (USB={is_usb})...")
+                    
+                    if is_usb:
+                        # USB cameras often need a "warm-up" - grab frames to flush buffer
+                        print(f"      Warming up USB camera (grabbing frames)...")
+                        for warmup in range(5):
+                            cap.grab()  # Grab without retrieving
+                        time.sleep(1)  # Give it a moment
+                        
+                        # Now try to read actual frames
+                        for attempt in range(15):  # More attempts
+                            ret, frame = cap.read()
+                            if ret and frame is not None:
+                                print(f"      ✓ Success on attempt {attempt + 1}")
+                                break
+                            if attempt < 5:
+                                time.sleep(0.1)  # Quick retries first
+                            else:
+                                time.sleep(1.0)  # Slower retries after
+                            print(f"      Attempt {attempt + 1} failed, retrying...")
+                    else:
+                        # Built-in cameras usually work quickly
+                        for attempt in range(3):
+                            ret, frame = cap.read()
+                            if ret and frame is not None:
+                                print(f"      ✓ Success on attempt {attempt + 1}")
+                                break
+                            time.sleep(0.3)
+                    
+                    if ret and frame is not None:
+                        backend = cap.getBackendName()
+                        available_cameras.append(i)
+                        print(f"   ✓ Camera {i}: {camera_names[i]} (backend: {backend})")
+                    else:
+                        camera_type = "USB camera" if is_usb else "camera"
+                        print(f"   ✗ Camera {i}: Can't read frames from {camera_type}")
+                    cap.release()
+                else:
+                    cap.release()
+                    print(f"   ✗ Camera {i}: Failed to open")
+                
+                # Wait a bit between cameras to avoid conflicts
+                time.sleep(0.2)
+                
+            except Exception as e:
+                print(f"   ✗ Camera {i}: Error - {e}")
+        
+        if not available_cameras:
+            print("   ⚠️  No cameras detected! Defaulting to index 0")
+            return 0
+        
+        print(f"\n📷 Found {len(available_cameras)} working camera(s): {available_cameras}")
+        
+        # Prefer external USB camera over integrated camera
+        for cam_idx in available_cameras:
+            cam_name = camera_names.get(cam_idx, "").lower()
+            if 'usb' in cam_name or 'external' in cam_name or 'webcam' in cam_name:
+                print(f"   → Using camera {cam_idx} (external USB webcam: {camera_names[cam_idx]})")
+                return cam_idx
+        
+        # If no USB camera found, prefer higher index (usually external)
+        if len(available_cameras) > 1:
+            preferred_camera = available_cameras[-1]  # Use last camera (often external)
+            print(f"   → Using camera {preferred_camera} ({camera_names.get(preferred_camera, 'Unknown')})")
+            return preferred_camera
+        else:
+            # Only one camera available, use it
+            preferred_camera = available_cameras[0]
+            print(f"   → Using camera {preferred_camera} ({camera_names.get(preferred_camera, 'Only camera')})")
+            return preferred_camera
     
     def start_monitoring(self):
         if self.is_monitoring:
             return False
         
-        # Initialize camera
-        self.cap = cv2.VideoCapture(0)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 160)  # Very small
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 120)  # Very small
-        self.cap.set(cv2.CAP_PROP_FPS, 10)  # 10 FPS for higher accuracy
+        # Initialize camera (already validated during detection, so should be fast)
+        self.cap = cv2.VideoCapture(self.camera_index)
+        
+        if not self.cap.isOpened():
+            print(f"❌ Failed to open camera {self.camera_index}")
+            return False
+        
+        # Don't apply custom resolution/FPS - use camera defaults for better compatibility
+        # This prevents issues with USB cameras that don't support specific resolutions
+        width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+        
+        print(f"✓ Camera initialized: {width}x{height} @ {fps}fps")
         
         self.is_monitoring = True
         self.start_time = time.time()
@@ -125,6 +235,20 @@ class MinimalBreathingMonitor:
             data = np.array(self.breathing_data)
             timestamps = np.array(self.timestamps)
             
+            # Filter data to only use data after 20 seconds (to avoid initial inconsistencies)
+            mask = timestamps >= 20.0
+            
+            # Check if we have enough data after 20 seconds
+            if np.sum(mask) < 20:  # Need at least 20 data points after 20s
+                print("⚠️ Insufficient data after 20 seconds for respiration rate calculation")
+                print(f"   Collected {len(data)} total points, but only {np.sum(mask)} after 20s")
+                return None
+            
+            # Use only data from 20 seconds onwards
+            data = data[mask]
+            timestamps = timestamps[mask]
+            print(f"📊 Using data from 20s onwards: {len(data)} points (range: {timestamps[0]:.1f}s - {timestamps[-1]:.1f}s)")
+            
             # Check data variation first
             data_range = np.max(data) - np.min(data)
             print(f"📊 Data range: {data_range:.3f} (min: {np.min(data):.3f}, max: {np.max(data):.3f})")
@@ -191,18 +315,21 @@ class MinimalBreathingMonitor:
                 
                 print(f"📊 Interval analysis - Mean: {mean_interval:.2f}s, Std: {std_interval:.2f}s, CV: {cv:.3f}")
                 
-                # If coefficient of variation > 0.3, breathing is irregular (missing peaks)
-                if cv > 0.3:
-                    print("⚠️ Irregular breathing pattern detected - possible missing peaks")
+                # If coefficient of variation > 0.25, breathing is irregular (more sensitive)
+                if cv > 0.25:
+                    print("⚠️ Irregular breathing pattern detected (CV > 0.25) - possible missing peaks")
                     return "N/A"
                 
                 # Check for outliers (intervals that are significantly different)
-                # An interval is an outlier if it's more than 2 standard deviations from the mean
-                outliers = np.abs(time_intervals - mean_interval) > (2 * std_interval)
+                # An interval is an outlier if it's more than 2.0 standard deviations from the mean
+                # More strict threshold to catch abnormal intervals
+                outliers = np.abs(time_intervals - mean_interval) > (2.0 * std_interval)
                 outlier_count = np.sum(outliers)
                 
                 if outlier_count > 0:
-                    print(f"⚠️ {outlier_count} irregular intervals detected - possible missing peaks")
+                    outlier_intervals = time_intervals[outliers]
+                    print(f"⚠️ {outlier_count} irregular interval(s) detected: {outlier_intervals}")
+                    print(f"   Outliers are more than 2.0 std devs from mean ({mean_interval:.2f}s ± {2.0*std_interval:.2f}s)")
                     return "N/A"
             
             # Filter out unrealistic intervals (relaxed constraints)
