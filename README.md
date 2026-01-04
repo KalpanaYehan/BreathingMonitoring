@@ -1,14 +1,16 @@
 # Sleep Monitoring - Breathing Rate Detection
 
-A real-time breathing rate monitoring system using computer vision and signal processing techniques.
+A real-time breathing rate monitoring system using computer vision and signal processing techniques. **Designed for local installation** to ensure privacy and optimal performance.
 
 ## Features
 
 - **Non-contact monitoring**: Uses camera to detect chest movements
 - **Real-time analysis**: Live breathing rate calculation
+- **Local processing**: Complete privacy - all data stays on your computer
 - **Web interface**: Desktop and mobile-friendly UI
 - **Quality control**: Advanced algorithms to ensure data reliability
 - **Adaptive detection**: Works with various breathing patterns
+- **Easy installation**: Simple setup with automated installer
 
 ## Technical Implementation
 
@@ -30,24 +32,45 @@ Based on established research in respiratory monitoring:
 - "Advancements in Methods and Camera-Based Sensors for the Quantification of Respiration" (PMC7766256)
 - "Sensing Systems for Respiration Monitoring: A Technical Systematic Review" (PMC7570710)
 
-## Installation
+## 🚀 Quick Installation
 
-### Prerequisites
-- Python 3.8+
-- OpenCV
-- NumPy
-- SciPy
-- Flask
+### **Option 1: Automated Installer (Recommended)**
+```bash
+# Download and run installer
+python run_installer.py
+```
 
-### Setup
+### **Option 2: Manual Installation**
 ```bash
 # Install dependencies
-pip install -r breathing_monitor/python_version/requirements.txt
+pip install -r requirements.txt
 
 # Run the application
-cd breathing_monitor/python_version
-python minimal_monitor.py
+python breathing_monitor/python_version/minimal_monitor.py
 ```
+
+### **Option 3: Download Release Package**
+1. Download from [GitHub Releases](https://github.com/yourusername/sleep-monitoring-breathing-detection/releases)
+2. Extract the package
+3. Run `install.bat` (Windows) or `install.sh` (macOS/Linux)
+4. Follow the instructions
+
+## 📱 Usage
+
+1. **Start the application:**
+   ```bash
+   python breathing_monitor/python_version/minimal_monitor.py
+   ```
+
+2. **Open in browser:**
+   - Desktop: http://localhost:5000
+   - Mobile: https://localhost:5000/mobile
+
+3. **Position your chest in the camera view**
+
+4. **Click "Start Monitoring"**
+
+5. **Wait for results (30+ seconds recommended)**
 
 ## Usage
 

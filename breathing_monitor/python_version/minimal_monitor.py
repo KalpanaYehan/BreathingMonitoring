@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import time
+from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 import threading
 from scipy.signal import find_peaks
@@ -16,6 +17,8 @@ class MinimalBreathingMonitor:
         self.timestamps = []
         self.is_monitoring = False
         self.start_time = None
+        self.try_index = 0  # Track the number of monitoring sessions
+        self.output_file = None  # File handle for writing data
         
         # Very minimal settings
         self.sample_rate = 5  # Hz (5 samples per second for accuracy)
@@ -147,6 +150,13 @@ class MinimalBreathingMonitor:
         self.breathing_data = []
         self.timestamps = []
         
+        # Create output file with format: Try_(index)_(starttime).txt
+        self.try_index += 1
+        start_time_str = datetime.fromtimestamp(self.start_time).strftime('%Y%m%d_%H%M%S')
+        filename = f"Try_{self.try_index}_{start_time_str}.txt"
+        self.output_file = open(filename, 'w')
+        print(f"📝 Writing data to: {filename}")
+        
         # Start monitoring
         threading.Thread(target=self._monitor_loop, daemon=True).start()
         print("🚀 Minimal monitoring started")
@@ -154,6 +164,12 @@ class MinimalBreathingMonitor:
     
     def stop_monitoring(self):
         self.is_monitoring = False
+        
+        # Close output file
+        if self.output_file:
+            self.output_file.close()
+            self.output_file = None
+            print("📝 Data file closed")
         
         if self.cap and self.cap.isOpened():
             self.cap.release()
@@ -182,13 +198,21 @@ class MinimalBreathingMonitor:
                     # Use improved breathing detection
                     brightness = self.simple_breathing_detection(frame)
                     if brightness is not None:
+                        current_time = time.time()
+                        current_timestamp = current_time - self.start_time
                         self.breathing_data.append(float(brightness))
-                        self.timestamps.append(time.time() - self.start_time)
+                        self.timestamps.append(current_timestamp)
                         
                         # Keep only recent data
                         if len(self.breathing_data) > self.max_data_points:
                             self.breathing_data.pop(0)
                             self.timestamps.pop(0)
+                        
+                        # Write data to file with actual time
+                        if self.output_file:
+                            actual_time_str = datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # Include milliseconds
+                            self.output_file.write(f"{actual_time_str},{brightness:.1f}\n")
+                            self.output_file.flush()  # Ensure data is written immediately
                         
                         print(f"Data: {brightness:.1f}")
                 
@@ -315,22 +339,29 @@ class MinimalBreathingMonitor:
                 
                 print(f"📊 Interval analysis - Mean: {mean_interval:.2f}s, Std: {std_interval:.2f}s, CV: {cv:.3f}")
                 
-                # If coefficient of variation > 0.25, breathing is irregular (more sensitive)
-                if cv > 0.25:
-                    print("⚠️ Irregular breathing pattern detected (CV > 0.25) - possible missing peaks")
+                # If coefficient of variation > 0.35, breathing is irregular (relaxed from 0.25)
+                if cv > 0.35:
+                    print("⚠️ Irregular breathing pattern detected (CV > 0.35) - possible missing peaks")
                     return "N/A"
                 
                 # Check for outliers (intervals that are significantly different)
-                # An interval is an outlier if it's more than 2.0 standard deviations from the mean
-                # More strict threshold to catch abnormal intervals
-                outliers = np.abs(time_intervals - mean_interval) > (2.0 * std_interval)
+                # An interval is an outlier if it's more than 3.0 standard deviations from the mean (relaxed from 2.0)
+                # Allow some outliers if most data is good
+                outliers = np.abs(time_intervals - mean_interval) > (3.0 * std_interval)
                 outlier_count = np.sum(outliers)
+                outlier_percentage = (outlier_count / len(time_intervals)) * 100
                 
                 if outlier_count > 0:
                     outlier_intervals = time_intervals[outliers]
-                    print(f"⚠️ {outlier_count} irregular interval(s) detected: {outlier_intervals}")
-                    print(f"   Outliers are more than 2.0 std devs from mean ({mean_interval:.2f}s ± {2.0*std_interval:.2f}s)")
-                    return "N/A"
+                    print(f"📊 {outlier_count} outlier interval(s) detected: {outlier_intervals} ({outlier_percentage:.1f}% of intervals)")
+                    print(f"   Outliers are more than 3.0 std devs from mean ({mean_interval:.2f}s ± {3.0*std_interval:.2f}s)")
+                    
+                    # Only reject if more than 30% of intervals are outliers (allow some natural variation)
+                    if outlier_percentage > 30:
+                        print("⚠️ Too many outliers detected - rejecting calculation")
+                        return "N/A"
+                    else:
+                        print(f"✓ Acceptable outlier percentage ({outlier_percentage:.1f}% ≤ 30%) - continuing with calculation")
             
             # Filter out unrealistic intervals (relaxed constraints)
             # Allow wider range for subtle breathing patterns
