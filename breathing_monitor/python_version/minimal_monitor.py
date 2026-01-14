@@ -13,6 +13,7 @@ class MinimalBreathingMonitor:
     def __init__(self, camera_index=None):
         self.cap = None
         self.camera_index = camera_index  # None=auto-detect, 0=laptop camera, 1=external webcam, etc.
+        self.camera_backend = None  # Store which backend works for the selected camera
         self.breathing_data = []
         self.timestamps = []
         self.is_monitoring = False
@@ -30,6 +31,27 @@ class MinimalBreathingMonitor:
         
         print(f"✅ Minimal Breathing Monitor initialized (using camera {self.camera_index})")
     
+    def _get_camera_vendor_info(self, video_index):
+        """Get USB vendor/model info for camera identification"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['udevadm', 'info', '--query=all', f'--name=/dev/video{video_index}'],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                vendor_id = None
+                vendor_name = None
+                for line in result.stdout.split('\n'):
+                    if 'ID_VENDOR_ID=' in line:
+                        vendor_id = line.split('=')[1].strip()
+                    elif 'ID_VENDOR_ENC=' in line and not vendor_name:
+                        vendor_name = line.split('=')[1].strip().replace('\\x20', ' ').replace('\\x2c', ',')
+                return vendor_id, vendor_name
+        except:
+            pass
+        return None, None
+    
     def _find_available_camera(self):
         """Find the first available camera, preferring external webcams"""
         print("🔍 Detecting available cameras...")
@@ -37,6 +59,14 @@ class MinimalBreathingMonitor:
         # Try indices 0-5 to find cameras that can actually read frames
         available_cameras = []
         camera_names = {}
+        camera_backends = {}  # Store which backend works for each camera
+        camera_vendors = {}  # Store vendor info for better USB detection
+        
+        # Backends to try (CAP_ANY first as it works better for USB cameras)
+        backends_to_try = [
+            (cv2.CAP_ANY, "ANY"),
+            (cv2.CAP_V4L2, "V4L2"),
+        ]
         
         for i in range(5):
             try:
@@ -49,52 +79,90 @@ class MinimalBreathingMonitor:
                 except:
                     continue  # Skip if device doesn't exist
                 
-                cap = cv2.VideoCapture(i)
-                if cap.isOpened():
-                    # Some cameras (especially USB) need significant time to initialize
-                    ret, frame = False, None
-                    is_usb = 'usb' in name.lower()
-                    
-                    print(f"      Testing camera {i} (USB={is_usb})...")
-                    
-                    if is_usb:
-                        # USB cameras often need a "warm-up" - grab frames to flush buffer
-                        print(f"      Warming up USB camera (grabbing frames)...")
-                        for warmup in range(5):
-                            cap.grab()  # Grab without retrieving
-                        time.sleep(1)  # Give it a moment
+                # Get vendor info to better identify USB cameras
+                vendor_id, vendor_name = self._get_camera_vendor_info(i)
+                if vendor_id:
+                    camera_vendors[i] = {'id': vendor_id, 'name': vendor_name}
+                    print(f"      Vendor: {vendor_name} (ID: {vendor_id})")
+                
+                # Check if this is a USB camera by checking device path
+                is_usb = False
+                try:
+                    device_path = os.readlink(f'/sys/class/video4linux/video{i}/device')
+                    if 'usb' in device_path.lower():
+                        is_usb = True
+                except:
+                    pass
+                
+                # Also check if name or vendor suggests USB
+                if not is_usb:
+                    is_usb = 'usb' in name.lower() or (vendor_name and 'usb' in vendor_name.lower())
+                
+                print(f"      Testing camera {i} (USB={is_usb})...")
+                
+                # Try different backends for this camera
+                camera_works = False
+                working_backend = None
+                working_backend_name = None
+                
+                for backend_id, backend_name in backends_to_try:
+                    try:
+                        cap = cv2.VideoCapture(i, backend_id)
+                        if not cap.isOpened():
+                            cap.release()
+                            continue
                         
-                        # Now try to read actual frames
-                        for attempt in range(15):  # More attempts
-                            ret, frame = cap.read()
-                            if ret and frame is not None:
-                                print(f"      ✓ Success on attempt {attempt + 1}")
-                                break
-                            if attempt < 5:
-                                time.sleep(0.1)  # Quick retries first
-                            else:
-                                time.sleep(1.0)  # Slower retries after
-                            print(f"      Attempt {attempt + 1} failed, retrying...")
-                    else:
-                        # Built-in cameras usually work quickly
-                        for attempt in range(3):
-                            ret, frame = cap.read()
-                            if ret and frame is not None:
-                                print(f"      ✓ Success on attempt {attempt + 1}")
-                                break
-                            time.sleep(0.3)
-                    
-                    if ret and frame is not None:
-                        backend = cap.getBackendName()
-                        available_cameras.append(i)
-                        print(f"   ✓ Camera {i}: {camera_names[i]} (backend: {backend})")
-                    else:
-                        camera_type = "USB camera" if is_usb else "camera"
-                        print(f"   ✗ Camera {i}: Can't read frames from {camera_type}")
-                    cap.release()
+                        # Set reasonable defaults
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                        time.sleep(0.3)  # Give camera time to adjust
+                        
+                        ret, frame = False, None
+                        
+                        if is_usb:
+                            # USB cameras often need a "warm-up"
+                            for warmup in range(3):
+                                cap.grab()
+                            time.sleep(0.5)
+                            
+                            # Try to read frames
+                            for attempt in range(10):
+                                ret, frame = cap.read()
+                                if ret and frame is not None:
+                                    print(f"      ✓ Success with {backend_name} backend on attempt {attempt + 1}")
+                                    camera_works = True
+                                    working_backend = backend_id
+                                    working_backend_name = backend_name
+                                    break
+                                time.sleep(0.2)
+                        else:
+                            # Built-in cameras usually work quickly
+                            for attempt in range(3):
+                                ret, frame = cap.read()
+                                if ret and frame is not None:
+                                    print(f"      ✓ Success with {backend_name} backend on attempt {attempt + 1}")
+                                    camera_works = True
+                                    working_backend = backend_id
+                                    working_backend_name = backend_name
+                                    break
+                                time.sleep(0.2)
+                        
+                        cap.release()
+                        
+                        if camera_works:
+                            break  # Found working backend, no need to try others
+                            
+                    except Exception as e:
+                        continue
+                
+                if camera_works:
+                    available_cameras.append(i)
+                    camera_backends[i] = working_backend
+                    vendor_info = f" ({camera_vendors[i]['name']})" if i in camera_vendors else ""
+                    print(f"   ✓ Camera {i}: {camera_names[i]}{vendor_info} (backend: {working_backend_name})")
                 else:
-                    cap.release()
-                    print(f"   ✗ Camera {i}: Failed to open")
+                    camera_type = "USB camera" if is_usb else "camera"
+                    print(f"   ✗ Camera {i}: Can't read frames from {camera_type} with any backend")
                 
                 # Wait a bit between cameras to avoid conflicts
                 time.sleep(0.2)
@@ -108,34 +176,63 @@ class MinimalBreathingMonitor:
         
         print(f"\n📷 Found {len(available_cameras)} working camera(s): {available_cameras}")
         
-        # Prefer external USB camera over integrated camera
+        # Prefer USB camera - check by vendor info or device path
         for cam_idx in available_cameras:
+            # Check if this is a USB camera
+            is_usb_camera = False
             cam_name = camera_names.get(cam_idx, "").lower()
+            
+            # Check by name
             if 'usb' in cam_name or 'external' in cam_name or 'webcam' in cam_name:
-                print(f"   → Using camera {cam_idx} (external USB webcam: {camera_names[cam_idx]})")
+                is_usb_camera = True
+            
+            # Check by vendor info (USB cameras often have specific vendor IDs)
+            if cam_idx in camera_vendors:
+                vendor_info = camera_vendors[cam_idx]
+                # Common USB webcam vendors (you can add more)
+                usb_vendor_ids = ['0c45', '046d', '04f2', '13d3', '174f']  # Microdia, Logitech, Chicony, IMC, Syntek
+                if vendor_info['id'].lower() in usb_vendor_ids:
+                    is_usb_camera = True
+            
+            if is_usb_camera:
+                vendor_info = f" ({camera_vendors[cam_idx]['name']})" if cam_idx in camera_vendors else ""
+                print(f"   → Using camera {cam_idx} (USB webcam: {camera_names[cam_idx]}{vendor_info})")
+                self.camera_backend = camera_backends.get(cam_idx)
                 return cam_idx
         
         # If no USB camera found, prefer higher index (usually external)
         if len(available_cameras) > 1:
             preferred_camera = available_cameras[-1]  # Use last camera (often external)
-            print(f"   → Using camera {preferred_camera} ({camera_names.get(preferred_camera, 'Unknown')})")
+            vendor_info = f" ({camera_vendors[preferred_camera]['name']})" if preferred_camera in camera_vendors else ""
+            print(f"   → Using camera {preferred_camera} ({camera_names.get(preferred_camera, 'Unknown')}{vendor_info})")
+            self.camera_backend = camera_backends.get(preferred_camera)
             return preferred_camera
         else:
             # Only one camera available, use it
             preferred_camera = available_cameras[0]
-            print(f"   → Using camera {preferred_camera} ({camera_names.get(preferred_camera, 'Only camera')})")
+            vendor_info = f" ({camera_vendors[preferred_camera]['name']})" if preferred_camera in camera_vendors else ""
+            print(f"   → Using camera {preferred_camera} ({camera_names.get(preferred_camera, 'Only camera')}{vendor_info})")
+            self.camera_backend = camera_backends.get(preferred_camera)
             return preferred_camera
     
     def start_monitoring(self):
         if self.is_monitoring:
             return False
         
-        # Initialize camera (already validated during detection, so should be fast)
-        self.cap = cv2.VideoCapture(self.camera_index)
+        # Initialize camera with the backend that worked during detection
+        if self.camera_backend is not None:
+            self.cap = cv2.VideoCapture(self.camera_index, self.camera_backend)
+        else:
+            self.cap = cv2.VideoCapture(self.camera_index)
         
         if not self.cap.isOpened():
             print(f"❌ Failed to open camera {self.camera_index}")
             return False
+        
+        # Set reasonable defaults for better compatibility
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        time.sleep(0.5)  # Give camera time to adjust
         
         # Don't apply custom resolution/FPS - use camera defaults for better compatibility
         # This prevents issues with USB cameras that don't support specific resolutions
