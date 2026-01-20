@@ -34,26 +34,10 @@ Based on established research in respiratory monitoring:
 
 ## 🚀 Quick Installation
 
-### **Option 1: Automated Installer (Recommended)**
 ```bash
-# Download and run installer
-python run_installer.py
-```
-
-### **Option 2: Manual Installation**
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
 # Run the application
 python breathing_monitor/python_version/minimal_monitor.py
 ```
-
-### **Option 3: Download Release Package**
-1. Download from [GitHub Releases](https://github.com/yourusername/sleep-monitoring-breathing-detection/releases)
-2. Extract the package
-3. Run `install.bat` (Windows) or `install.sh` (macOS/Linux)
-4. Follow the instructions
 
 ## 📱 Usage
 
@@ -64,7 +48,6 @@ python breathing_monitor/python_version/minimal_monitor.py
 
 2. **Open in browser:**
    - Desktop: http://localhost:5000
-   - Mobile: https://localhost:5000/mobile
 
 3. **Position your chest in the camera view**
 
@@ -80,10 +63,6 @@ python breathing_monitor/python_version/minimal_monitor.py
 - Click "Start Monitoring" to begin detection
 - View real-time breathing rate and video feed
 
-### Mobile Interface
-- Open `https://localhost:5000/mobile` (HTTPS required for camera access)
-- Grant camera permissions when prompted
-- Use touch-friendly interface for monitoring
 
 ## Algorithm Details
 
@@ -102,31 +81,3 @@ python breathing_monitor/python_version/minimal_monitor.py
 - **Smoothing**: Gaussian filter (σ=0.5)
 - **Region of Interest**: Center 50% of frame
 
-## File Structure
-
-```
-breathing_monitor/
-├── python_version/
-│   ├── minimal_monitor.py      # Main application
-│   ├── requirements.txt        # Dependencies
-│   ├── templates/
-│   │   ├── minimal.html       # Desktop interface
-│   │   └── mobile.html        # Mobile interface
-│   └── generate_ssl.sh        # SSL certificate generator
-└── README.md                  # Project documentation
-```
-
-## Research References
-
-1. **Gaussian Smoothing**: Standard practice in biomedical signal processing
-2. **Adaptive Thresholding**: Based on respiratory monitoring research
-3. **Peak Detection**: Validated algorithms for breathing detection
-4. **Quality Control**: Statistical methods for data reliability
-
-## License
-
-This project is for educational and research purposes.
-
-## Contributing
-
-Please ensure all changes maintain the research-based approach and include proper documentation for algorithm choices.
